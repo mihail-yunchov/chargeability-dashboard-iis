@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SD Hub Chargeability Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f0f2f7; --bg2: #ffffff; --bg3: #f6f8fc; --bg4: #eef1f8;
+    --border: rgba(25,33,102,0.11); --border2: rgba(25,33,102,0.18);
+    --text: #192166; --text2: #7a85a8; --text3: #9aaac8;
+    --accent: #1a5c8f; --accent2: #009EBD;
+    --green: #3d9e4a; --amber: #d97706; --red: #e4003a; --teal: #009EBD;
+    --font: 'DM Sans', sans-serif; --mono: 'DM Mono', monospace;
+    --r: 6px; --rl: 7px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; padding-left: 222px; }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 22px; height: 52px; border-bottom: 1px solid var(--border);
+    background: var(--bg2); position: sticky; top: 0; z-index: 100;
+  }
+  .header-sub { background: var(--bg); border-radius: 5px; padding: 3px 9px; }
+  .logo-mark {
+    width: 30px; height: 30px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 7px; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #fff;
+  }
+  .header-title { font-size: 14px; font-weight: 500; }
+  .header-sub { font-size: 11px; color: var(--text2); }
+  .period-badge {
+    font-family: var(--mono); font-size: 11px;
+    background: var(--bg4); border: 1px solid var(--border2);
+    color: var(--text2); padding: 4px 10px; border-radius: 6px;
+  }
+
+  /* ── UPLOAD ── */
+  #upload-zone {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; min-height: calc(100vh - 57px); padding: 40px;
+  }
+  .upload-card {
+    background: var(--bg2); border: 1.5px dashed var(--border2);
+    border-radius: var(--rl); padding: 48px 56px; text-align: center;
+    max-width: 520px; width: 100%; cursor: pointer;
+    transition: border-color .2s, background .2s; position: relative;
+  }
+  .upload-card:hover, .upload-card.drag-over { border-color: var(--accent); background: rgba(79,142,247,.05); }
+  .upload-icon { width: 48px; height: 48px; background: var(--bg4); border-radius: 12px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px; font-size: 20px; }
+  .upload-title { font-size: 17px; font-weight: 500; margin-bottom: 8px; }
+  .upload-sub { font-size: 13px; color: var(--text2); line-height: 1.6; }
+  .upload-hint { margin-top: 18px; font-size: 11px; color: var(--text3); font-family: var(--mono); }
+  #file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* ── DASHBOARD ── */
+  #dashboard { display: none; padding: 20px 28px 48px; }
+
+  /* ── FILTER BAR ── */
+  .filter-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  .filter-sep { width: 1px; height: 20px; background: var(--border2); margin: 0 4px; }
+  .filter-label { font-size: 13px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+  .f-btn {
+    font-family: var(--mono); font-size: 13px; padding: 5px 14px;
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 5px; color: var(--text2); cursor: pointer; transition: all .15s; white-space: nowrap;
+  }
+  .f-btn:hover { border-color: var(--border2); color: var(--text); }
+  .f-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 500; }
+  .f-btn.all-active { background: var(--bg4); border-color: var(--border2); color: var(--text); }
+  .reload-btn { margin-left: auto; font-size: 12px; padding: 5px 14px; background: transparent; border: 1px solid var(--border2); border-radius: 5px; color: var(--text2); cursor: pointer; }
+  .reload-btn:hover { color: var(--text); border-color: var(--text2); }
+  .team-search-input {
+    font-family: var(--font); font-size: 12px;
+    background: var(--bg3); border: 1px solid var(--border);
+    color: var(--text); padding: 5px 10px; border-radius: 5px;
+    width: 200px; outline: none; transition: border-color .15s;
+  }
+  .team-search-input:focus { border-color: var(--accent); }
+  .team-search-input::placeholder { color: var(--text3); }
+
+  /* ── KPI CARDS ── */
+  .kpi-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rl); padding: 16px 18px; position: relative; overflow: hidden; }
+  .kpi::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .kpi.c-blue::before { background: linear-gradient(90deg,var(--accent),var(--accent2)); }
+  .kpi.c-green::before { background: var(--green); }
+  .kpi.c-amber::before { background: var(--amber); }
+  .kpi.c-teal::before { background: var(--teal); }
+  .kpi.c-red::before { background: var(--red); }
+  .kpi.c-train::before { background: linear-gradient(90deg,#8bb0dd,#bda6dc); }
+  .kpi.c-internal::before { background: #78bec8; }
+  .kpi-label { font-size: 12px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .kpi-value { font-size: 28px; font-weight: 500; font-family: var(--mono); letter-spacing: -0.5px; }
+  .kpi-value span { font-size: 14px; font-weight: 400; color: var(--text2); }
+  .kpi-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+  /* ── CHART GRID ── */
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .chart-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rl); padding: 18px 20px; }
+  .card-full { grid-column: 1 / -1; }
+  .card-title { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
+  .chart-wrap { position: relative; }
+
+  /* ── TABLES ── */
+  .table-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--rl); overflow: hidden; margin-bottom: 20px; }
+  .table-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+  .table-title { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; padding: 9px 18px; text-align: left; border-bottom: 1px solid var(--border); background: var(--bg3); white-space: nowrap; }
+  tbody td { padding: 10px 18px; font-size: 13px; border-bottom: 1px solid var(--border); color: var(--text); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: rgba(25,33,102,0.03); }
+  .tl-row td { opacity: .55; }
+  .mono { font-family: var(--mono); }
+  .bold { font-weight: 500; }
+
+  /* ── INFO BUTTON & TOOLTIP ── */
+  .info-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--bg4); border: 1px solid var(--border2);
+    color: var(--text3); font-size: 11px; font-weight: 600;
+    cursor: pointer; flex-shrink: 0; transition: all .15s;
+    font-family: var(--font); line-height: 1; user-select: none;
+    position: relative;
+  }
+  .info-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,.1); }
+  .tooltip-box {
+    display: none; position: fixed; z-index: 999;
+    background: var(--bg3); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 14px 16px;
+    max-width: 340px; width: max-content;
+    box-shadow: 0 10px 32px rgba(25,33,102,0.16);
+  }
+  .tooltip-box.visible { display: block; }
+  .tooltip-title { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  .tooltip-body { font-size: 12px; color: var(--text2); line-height: 1.6; }
+  .tooltip-body strong { color: var(--text); font-weight: 500; }
+  .tooltip-formula {
+    margin-top: 10px; padding: 8px 10px;
+    background: var(--bg4); border-radius: 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--teal);
+    line-height: 1.7;
+  }
+
+  /* ── MINI BAR ── */
+  .bar-wrap { display: flex; align-items: center; gap: 8px; }
+  .bar-bg { flex: 1; height: 3px; background: var(--bg4); border-radius: 2px; min-width: 60px; }
+  .bar-fill { height: 100%; border-radius: 2px; }
+  .pv { font-family: var(--mono); font-size: 12px; min-width: 42px; text-align: right; font-weight: 500; }
+
+  /* ── TAGS ── */
+  .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .03em; }
+  .tag-h { background: rgba(62,207,142,.12); color: var(--green); border: 1px solid rgba(62,207,142,.25); }
+  .tag-m { background: rgba(245,166,35,.12); color: var(--amber); border: 1px solid rgba(245,166,35,.25); }
+  .tag-l { background: rgba(242,107,107,.12); color: var(--red); border: 1px solid rgba(242,107,107,.25); }
+  .tag-tl { background: rgba(79,142,247,.1); color: var(--accent); border: 1px solid rgba(79,142,247,.25); }
+  .tag-ot { background: rgba(168,85,247,.12); color: #c084fc; border: 1px solid rgba(168,85,247,.3); }
+  .tag-train { background: rgba(96,165,250,.12); color: #60a5fa; border: 1px solid rgba(96,165,250,.3); }
+  .tag-coach { background: rgba(167,139,250,.12); color: #a78bfa; border: 1px solid rgba(167,139,250,.3); }
+  .tag-ext { background: rgba(251,146,60,.14); color: #fb923c; border: 1px solid rgba(251,146,60,.35); font-size: 9px; padding: 1px 5px; }
+  .ext-chip {
+    display: inline-block; font-size: 9px; font-weight: 600;
+    background: rgba(251,146,60,.14); color: #fb923c;
+    border: 1px solid rgba(251,146,60,.35);
+    padding: 1px 5px; border-radius: 4px; margin-left: 6px;
+    font-family: var(--mono); letter-spacing: .04em;
+    vertical-align: middle;
+  }
+
+  /* ── TEAM HEAT GRID ── */
+  .heat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .heat-cell {
+    background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r);
+    padding: 12px 14px; cursor: pointer; transition: border-color .15s, background .15s;
+    position: relative; overflow: hidden;
+  }
+  .heat-cell:hover { border-color: var(--border2); background: var(--bg4); }
+  .heat-cell.selected { border-color: var(--accent); }
+  .heat-cell::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; border-radius: 3px 0 0 3px; }
+  .heat-cell-name { font-size: 13px; font-weight: 500; margin-bottom: 2px; }
+  .heat-cell-sub { font-size: 11px; color: var(--text2); }
+  .heat-cell-pct { font-family: var(--mono); font-size: 20px; font-weight: 300; margin-top: 6px; }
+
+  .legend { display: flex; gap: 14px; align-items: center; font-size: 11px; color: var(--text2); }
+  .ldot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+
+  .footer-note { font-size: 11px; color: var(--text3); text-align: center; padding: 8px; font-family: var(--mono); }
+
+  .section-sep { display: flex; align-items: center; gap: 10px; margin: 20px 0 14px; }
+  .section-sep-line { flex: 1; height: 1px; background: var(--border); }
+  .section-sep-text { font-size: 11px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+
+  @media (max-width: 1000px) {
+    .kpi-row { grid-template-columns: repeat(3, 1fr); }
+    .chart-row, .chart-row-3 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 700px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    #dashboard { padding: 12px; }
+    .header { padding: 12px 14px; }
+  }
+
+  /* ── GRADIENT SIDEBAR (AI Radar) ── */
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; width: 222px; z-index: 200; overflow: hidden;
+    background: linear-gradient(160deg,#192166 0%,#1a3080 35%,#009EBD 80%,#00C4D0 100%); }
+  .sidebar::before { content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 120% 45% at 50% 0%, rgba(0,196,208,0.18) 0%, transparent 65%),
+      radial-gradient(ellipse 80% 40% at 100% 100%, rgba(0,158,189,0.22) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 30% at 0% 60%, rgba(25,33,102,0.35) 0%, transparent 70%); }
+  .sidebar-inner { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
+  .sb-head { height: 52px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+  .sb-logo { width: 30px; height: 30px; border-radius: 5px; background: rgba(255,255,255,0.14); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; letter-spacing: -0.5px; }
+  .sb-name { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: -0.2px; }
+  .sb-sub { font-size: 10px; color: rgba(255,255,255,0.42); }
+  .sb-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; }
+  .sb-scroll::-webkit-scrollbar { width: 6px; }
+  .sb-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 3px; }
+  .sb-sec { padding: 12px 10px 4px; }
+  .sb-sec-lbl { font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.30); letter-spacing: .1em; text-transform: uppercase; padding: 0 8px; margin-bottom: 5px; }
+  .sb-item { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 5px; cursor: pointer; color: rgba(255,255,255,0.58); font-size: 13px; font-weight: 500; position: relative; transition: all .15s; }
+  .sb-item svg { opacity: 0.72; flex-shrink: 0; }
+  .sb-item:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.85); }
+  .sb-item.active { background: rgba(255,255,255,0.10); color: #fff; }
+  .sb-item.active svg { opacity: 1; }
+  .sb-item.active::before { content: ''; position: absolute; left: 0; top: 6px; bottom: 6px; width: 3px; border-radius: 0 2px 2px 0; background: #00C4D0; }
+  .sb-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sb-div { height: 1px; background: rgba(255,255,255,0.07); margin: 8px 12px; }
+  .sb-foot { padding: 12px; border-top: 1px solid rgba(255,255,255,0.08); flex-shrink: 0; }
+  .sb-user { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: 5px; }
+  .sb-ava { width: 28px; height: 28px; border-radius: 50%; background: #fff; color: #192166; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.1); flex-shrink: 0; }
+  @media (max-width: 900px) { body { padding-left: 0; } .sidebar { display: none; } }
+</style>
+</head>
+<body>
+
+<aside class="sidebar"><div class="sidebar-inner">
+  <div class="sb-head">
+    <div class="sb-logo">IQ</div>
+    <div><div class="sb-name">Chargeability</div><div class="sb-sub">Ipsos Hub · Bulgaria</div></div>
+  </div>
+  <div class="sb-scroll">
+    <div class="sb-sec">
+      <div class="sb-sec-lbl">Views</div>
+      <div class="sb-item active" data-target="sec-overview"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>Overview</div>
+      <div class="sb-item" data-target="sec-teams"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Teams</div>
+      <div class="sb-item" data-target="sec-individuals"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="7" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>Individuals</div>
+      <div class="sb-item" data-target="sec-tables"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>Tables</div>
+    </div>
+    <div class="sb-div"></div>
+    <div class="sb-sec">
+      <div class="sb-sec-lbl">Performance band</div>
+      <div class="sb-item"><span class="sb-dot" style="background:#5dd368"></span>High <span style="opacity:.55;font-size:11px;margin-left:2px">≥65%</span></div>
+      <div class="sb-item"><span class="sb-dot" style="background:#f0b429"></span>Mid <span style="opacity:.55;font-size:11px;margin-left:2px">50–64%</span></div>
+      <div class="sb-item"><span class="sb-dot" style="background:#ff5a7a"></span>Low <span style="opacity:.55;font-size:11px;margin-left:2px">&lt;50%</span></div>
+    </div>
+  </div>
+  <div class="sb-foot">
+    <div class="sb-user">
+      <div class="sb-ava">SD</div>
+      <div><div style="font-size:12px;font-weight:700;color:#fff">SD Hub</div><div style="font-size:10px;color:rgba(255,255,255,0.85)"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#5dd368;margin-right:5px"></span>Ready</div></div>
+    </div>
+  </div>
+</div></aside>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div class="header-title" style="font-size:14px;font-weight:600;">Team Chargeability</div>
+    <div class="header-sub">IPSOS Bulgaria HUB — All Departments</div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center;">
+    <div class="period-badge" id="period-badge">No data</div>
+  </div>
+</div>
+
+<div id="upload-zone">
+  <div class="upload-card" id="drop-zone">
+    <input type="file" id="file-input" accept=".csv,.xlsx,.xls">
+    <div class="upload-icon">📂</div>
+    <div class="upload-title">Drop your iTime export here</div>
+    <div class="upload-sub">Upload <strong>EmployeeTimeReport</strong> from iTime (CSV or Excel).<br>All teams are auto-detected from the Direct Manager column.<br>External (outsourcing) teams are detected from sheet names.</div>
+    <div class="upload-hint">CSV · XLSX · Multi-tab supported</div>
+  </div>
+</div>
+
+<div id="tooltip-box" class="tooltip-box"></div>
+
+<div id="dashboard">
+
+  <!-- FILTER BAR -->
+  <div class="filter-bar">
+    <span class="filter-label">Month</span>
+    <div id="month-filters" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+    <button class="reload-btn" onclick="triggerReload()">↑ New file</button>
+  </div>
+  <div class="filter-bar" style="margin-top:-10px;">
+    <span class="filter-label">Team</span>
+    <div id="team-filters" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+  </div>
+  <div class="filter-bar" id="person-row" style="margin-top:-10px;display:none;">
+    <span class="filter-label">Person</span>
+    <div id="person-filters" style="display:flex;gap:6px;flex-wrap:wrap;flex:1;"></div>
+  </div>
+
+  <!-- KPI ROW -->
+  <div class="kpi-row" id="sec-overview" style="scroll-margin-top:70px;">
+    <div class="kpi c-blue">
+      <div class="kpi-label">Avg. Chargeability</div>
+      <div class="kpi-value" id="k-charge">—<span>%</span></div>
+      <div class="kpi-sub" id="k-charge-sub">selected teams excl. TL</div>
+    </div>
+    <div class="kpi c-green">
+      <div class="kpi-label">Chargeable Hours</div>
+      <div class="kpi-value" id="k-proj">—<span> h</span></div>
+      <div class="kpi-sub">billable project time</div>
+    </div>
+    <div class="kpi c-amber">
+      <div class="kpi-label">Free Time</div>
+      <div class="kpi-value" id="k-free">—<span> h</span></div>
+      <div class="kpi-sub">admin + idle</div>
+    </div>
+    <div class="kpi c-teal">
+      <div class="kpi-label">Avg Free / Day</div>
+      <div class="kpi-value" id="k-fpd">—<span> h</span></div>
+      <div class="kpi-sub">per person / working day</div>
+    </div>
+    <div class="kpi c-red">
+      <div class="kpi-label">Time Off</div>
+      <div class="kpi-value" id="k-vac">—<span> h</span></div>
+      <div class="kpi-sub" id="k-vac-sub">vacation · holiday</div>
+    </div>
+    <div class="kpi c-train">
+      <div class="kpi-label">Training Hours</div>
+      <div class="kpi-value" id="k-train">—<span> h</span></div>
+      <div class="kpi-sub" id="k-train-sub">trained · trainer</div>
+    </div>
+    <div class="kpi c-internal">
+      <div class="kpi-label">Internal Projects</div>
+      <div class="kpi-value" id="k-internal">—<span> h</span></div>
+      <div class="kpi-sub" id="k-internal-sub">P-project hours</div>
+    </div>
+  </div>
+
+  <!-- TEAM HEAT MAP -->
+  <div class="card" id="sec-teams" style="margin-bottom:20px;scroll-margin-top:70px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="card-title" style="margin-bottom:0;">Team overview — click to filter</div>
+        <span class="info-btn" onclick="showTip(this,'Team Overview','Each card shows one team (TL name, member count, chargeability %). Cards are sorted <strong>highest to lowest chargeability %</strong>.<br><br>The grid is <strong>hidden when All teams is selected</strong> — select one or more specific teams from the TEAM filter above to see cards here.<br><br>Only teams with ≥2 active people in the selected period are shown. Click any card to toggle that team in/out of the selection.','Chargeability % = Chargeable h ÷ Net Capacity × 100\nNet Capacity = (Mon–Fri days in period × 8h) − Vacation − Company Holiday − Leave')">i</span>
+      </div>
+      <div class="legend">
+        <span><span class="ldot" style="background:var(--green)"></span>≥65%</span>
+        <span><span class="ldot" style="background:var(--amber)"></span>50–64%</span>
+        <span><span class="ldot" style="background:var(--red)"></span>&lt;50%</span>
+      </div>
+    </div>
+    <div class="heat-grid" id="heat-grid"></div>
+  </div>
+
+  <!-- CHARTS ROW 1 -->
+  <div class="chart-row">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0;">Monthly chargeability — selected teams avg</div>
+        <span class="info-btn" onclick="showTip(this,'Monthly Chargeability','Average chargeability % per month for the selected teams (TLs excluded). Use the <strong>Month</strong> filter to multi-select specific months, or keep <em>All</em> for the full trend. Height matches Team Comparison chart for visual balance.<br><br>Colour: <strong>green ≥65%</strong> · <strong>amber 50–64%</strong> · <strong>red &lt;50%</strong>.','Formula per month:\nChargeability % = Σ Chargeable h ÷ Σ Net Capacity × 100\nNet Capacity = (Mon–Fri days in month × 8h) − Vacation − Company Holiday − Leave')">i</span>
+      </div>
+      <div class="chart-wrap" style="height:210px;"><canvas id="ch-monthly"></canvas></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <div class="card-title" style="margin-bottom:0;">Team comparison — chargeability %</div>
+        <span class="info-btn" onclick="showTip(this,'Team Comparison','Compares chargeability % across selected teams for the chosen period. Sorted highest to lowest.<br><br>Use the <strong>TEAM</strong> filter (multi-select) to choose specific teams to compare. When ≤10 teams visible: all shown. When &gt;10 teams: only top 5 + bottom 5 with a divider showing how many are hidden.<br><br>Only teams with ≥2 active people in the period are included.','Formula per team:\nChargeability % = Σ Chargeable h ÷ Σ Net Capacity × 100\nNet Capacity = (Mon–Fri days × 8h) − Vacation − Company Holiday − Leave\n(aggregated across all active months)')">i</span>
+      </div>
+      <div id="ch-teams-sub" style="font-size:10px;color:var(--text3);margin-bottom:10px;font-family:var(--mono);">&nbsp;</div>
+      <div class="chart-wrap" style="height:210px;"><canvas id="ch-teams"></canvas></div>
+    </div>
+  </div>
+
+  <!-- CHARTS ROW 2 -->
+  <div class="chart-row" id="sec-individuals" style="scroll-margin-top:70px;">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0;">Hours breakdown — chargeable vs free time vs training vs vacation</div>
+        <span class="info-btn" onclick="showTip(this,'Hours Breakdown','Stacked bar showing how total logged hours are distributed each month across six categories:<br><br><strong>Chargeable</strong> — billable hours on client projects.<br><strong>Free / Admin</strong> — Admin project, On Bench (18-069151-01/02, 15-000000-01-01), or On bench task; includes meetings and idle time.<br><strong>Training</strong> — trainee (Virtual/Face-to-face training) or trainer (Activities as a trainer). Part of Free/Admin but shown separately.<br><strong>Holiday</strong> — Company holiday and Office closure tasks (reduce Net Capacity).<br><strong>Leave</strong> — Authorised/paid/sick leave (reduces Net Capacity, not Free Time).<br><strong>Vacation</strong> — tasks containing the word Vacation.','Net Capacity = (Mon–Fri days × 8h) − Vacation − Company Holiday − Leave\nFree Time = Net Capacity − Chargeable\nTraining is shown separately, NOT double-counted with Free/Admin\nHoliday and Leave reduce capacity — they appear as separate stacks, NOT in Free Time')">i</span>
+      </div>
+      <div class="chart-wrap" style="height:210px;"><canvas id="ch-breakdown"></canvas></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;">
+        <div class="card-title" style="margin-bottom:0;">Individual chargeability — selected team members</div>
+        <span class="info-btn" onclick="showTip(this,'Individual Chargeability','Horizontal bar chart showing chargeability % per person, sorted highest to lowest. The number of rows shown matches the size of the largest team in the dataset.<br><br>A value <strong>above 100%</strong> means overtime — the person logged more chargeable hours than their net capacity.<br><br>TLs are excluded from this chart.','Formula per person:\nChargeability % = Chargeable h ÷ Net Capacity × 100\nNet Capacity = (Mon–Fri days in period × 8h) − Vacation − Company Holiday − Leave\n\n>100% = Overtime (chargeable > net capacity)')">i</span>
+      </div>
+      <div class="chart-wrap" style="height:210px;"><canvas id="ch-individual"></canvas></div>
+    </div>
+  </div>
+
+  <!-- MONTHLY SUMMARY TABLE -->
+  <div class="table-card" id="sec-tables" style="scroll-margin-top:70px;">
+    <div class="table-hdr">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="table-title">Monthly summary (excl. TLs)</div>
+        <span class="info-btn" onclick="showTip(this,'Monthly Summary Table','Aggregated view of team performance per calendar month. TLs are excluded from all calculations.<br><br><strong>People</strong> — non-TL members with logged hours that month.<br><strong>Net Cap</strong> — available hours after removing all time off.<br><strong>Chargeable</strong> — total billable project hours.<br><strong>Chargeability %</strong> — team-level chargeability for the month.<br><strong>Free Time</strong> — non-billable time (admin, idle, training, on bench).<br><strong>Avg Free / Day / Person</strong> — free time per person per actual working day.','Net Capacity = (Mon–Fri days in month × 8h × people) − Vacation − Company Holiday − Leave\nFree Time = Net Capacity − Chargeable h\nChargeability % = Chargeable ÷ Net Capacity × 100\nAvg Free/Day/Person = Free Time ÷ (people × actual working days)\nActual working days = Mon–Fri days − vacation days − holiday days − leave days')">i</span>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Month</th><th>People</th><th>Net Cap (h)</th>
+          <th>Chargeable (h)</th><th>Chargeability %</th>
+          <th>Free Time (h)</th><th>Avg Free / Day / Person</th>
+        </tr>
+      </thead>
+      <tbody id="mon-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- INDIVIDUAL TABLE -->
+  <div class="table-card">
+    <div class="table-hdr">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div class="table-title">Individual performance</div>
+        <span class="info-btn" onclick="showTip(this,'Individual Performance Table','One row per team member. Columns explained:<br><br><strong>Net Cap</strong> — available hours after removing all time off (vacation + holidays + authorised/sick leave).<br><strong>Chargeable</strong> — hours logged on client projects.<br><strong>Vacation</strong> — vacation hours (shown in Time Off KPI card).<br><strong>Free Time</strong> — Net Cap minus Chargeable. Includes admin, on bench, training, idle. Negative = overtime.<br><strong>Trained</strong> — hours as a trainee (Virtual/Face-to-face training). Part of Free Time, shown separately.<br><strong>Trainer</strong> — hours delivering training (Activities as a trainer). Part of Free Time, shown separately.<br><strong>Chargeability %</strong> — share of net capacity spent on billable work.<br><strong>Free / Day</strong> — average free hours per actual working day (holidays and leave days excluded from denominator).<br><br><strong>Badges: </strong>OT = overtime &gt;100% · TRAIN = significant trainee hours · COACH = significant trainer hours','Net Capacity = (Mon–Fri days in period × 8h) − Vacation − Company Holiday − Leave\nFree Time = Net Capacity − Chargeable h\nChargeability % = Chargeable ÷ Net Capacity × 100\nFree / Day = Free Time ÷ (Mon–Fri days − vacation days − holiday days − leave days)\n\nTrained / Trainer: part of Free Time, shown separately for context')">i</span>
+      </div>
+      <div class="legend" style="font-size:10px;gap:8px;">
+        <span><span class="ldot" style="background:var(--green)"></span>High ≥65%</span>
+        <span><span class="ldot" style="background:var(--amber)"></span>Mid 50–64%</span>
+        <span><span class="ldot" style="background:var(--red)"></span>Low &lt;50%</span>
+        <span><span class="ldot" style="background:#c084fc"></span>OT &gt;100%</span>
+        <span><span class="ldot" style="background:#60a5fa"></span>TRAIN</span>
+        <span><span class="ldot" style="background:#a78bfa"></span>COACH</span>
+        <span><span class="ldot" style="background:#22d3ee"></span>Internal</span>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>Team (TL)</th>
+          <th>Net Cap (h)</th>
+          <th>Chargeable (h)</th>
+          <th>Vacation (h)</th>
+          <th>Free Time (h)</th>
+          <th>Trained (h)</th>
+          <th>Trainer (h)</th>
+          <th>Internal (h)</th>
+          <th>Chargeability %</th>
+          <th>Free / Day</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="ind-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- CROSS-BU VALIDATION TABLE -->
+  <div id="crossbu-section" style="margin: 0 20px 20px;">
+    <div class="table-card">
+      <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);">
+        <div class="card-title" style="margin:0;">Project BU Validation</div>
+        <span id="crossbu-badge" style="font-size:11px;font-family:var(--mono);padding:2px 10px;border-radius:10px;border:1px solid;font-weight:600;">—</span>
+        <span class="info-btn" onclick="showTip(this,'Project BU Validation','Checks all projects owned by <strong>BU 26102 (Nordics CEEA &amp; Netherlands)</strong> — these are IIS projects.<br><br>If any employee from <strong>BU 26251 (Operations Bulgaria)</strong> has logged hours on such a project → they need a <strong>separate Operations job number</strong> instead.<br><br>Only client projects are checked. Respects the current Month and Team filters.','FLAG condition:\nProject BU (Job Owner) = 26102 (IIS project)\nAND employee BU = 26251 (Operations)\n→ Operations employee needs a separate OPS job number\n\nNot flagged:\nAll other combinations are OK')">i</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text2);font-family:var(--mono);">BU Job Owner 26102 · Ops employee 26251 · client projects only</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr style="background:var(--bg3);">
+              <th id="crossbu-sort-proj" onclick="crossBuSort('proj')" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2);white-space:nowrap;">Project #<span class="sort-arrow"> ↑</span></th>
+              <th style="padding:8px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:var(--text2);">Project Name</th>
+              <th id="crossbu-sort-iis" onclick="crossBuSort('iis')" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:#1a5c8f;white-space:nowrap;">IIS employees<span class="sort-arrow"> ⇅</span></th>
+              <th id="crossbu-sort-ops" onclick="crossBuSort('ops')" style="padding:8px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:#92400e;white-space:nowrap;">⚠ Ops BU (26251) — needs separate number<span class="sort-arrow"> ⇅</span></th>
+              <th style="padding:8px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;color:#92400e;white-space:nowrap;">OPS Hours by Month</th>
+            </tr>
+          </thead>
+          <tbody id="crossbu-tbody">
+            <tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text2);font-size:13px;">Upload a file to see validation results.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-note">Net Capacity = (Mon–Fri days × 8h) − Vacation − Company Holiday − Authorised/Sick Leave · Free Time = Net Capacity − Chargeable · Avg Free/Day excludes all absence days · TLs excluded from averages · OT = chargeability &gt;100% · Teams auto-detected from Direct Manager column</div>
+</div>
+
+<script>
+// ─── DYNAMIC TEAM DETECTION ─────────────────────────────────────────────────
+// TEAMS array is built dynamically from the CSV's Direct Manager column.
+// No manual configuration required — when the org changes, the next CSV upload reflects it automatically.
+let TEAMS = [];
+
+// Dynamic working days — counts Mon–Fri in any given month/year.
+// No hardcoded table needed; works correctly for 2026, 2027, and beyond.
+function getWorkingDays(year, month) {
+  const days = new Date(year, month, 0).getDate();
+  let count = 0;
+  for (let d = 1; d <= days; d++) {
+    const day = new Date(year, month - 1, d).getDay();
+    if (day !== 0 && day !== 6) count++;
+  }
+  return count;
+}
+
+// Legacy lookup kept only as fallback if year/month are unknown
+const WORKING_DAYS = {1:23,2:20,3:21,4:22,5:22,6:21,7:23,8:22,9:22,10:23,11:20,12:22};
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Non-chargeable project codes — treated as free/admin time, not billable
+const NON_CHARGEABLE_PROJECTS = new Set([
+  '18-069151-01',  // GOH BG On Bench (variant 1)
+  '18-069151-02',  // GOH BG On Bench (variant 2)
+  '15-000000-01-01', // Internal bench/leave project (On bench, Authorised leave, Office closure, Illness)
+]);
+
+// Minimum direct reports for a manager to be treated as a real Team Lead
+// (filters out senior managers/directors from showing as TLs of small ad-hoc groups)
+const MIN_TEAM_SIZE = 2;
+
+// Training thresholds: dynamic — calculated as max(average among trained, FLOOR)
+// FLOOR ensures small training amounts (e.g. 5h orientation) do not trigger badges.
+const TRAIN_FLOOR_HOURS = 16;  // ≈ 2 working days
+const COACH_FLOOR_HOURS = 8;   // ≈ 1 working day
+
+let allData = [];
+let activeMonths = new Set();
+let activeTeams = new Set();
+let activePerson = null;
+let charts = {};
+
+// These are rebuilt every time a new CSV is loaded
+let personTeamMap = {};
+let tlSet = new Set();
+let allPersonKeys = new Set();
+
+// Calculated dynamically per data load
+let dynamicThresholds = { trainFloor: TRAIN_FLOOR_HOURS, coachFloor: COACH_FLOOR_HOURS };
+
+// ─── BUILD TEAMS FROM CSV ───────────────────────────────────────────────────
+
+// Helper: tolerant column accessor — handles BOM, case variations, trim
+function getCol(row, ...names) {
+  for (const name of names) {
+    if (row[name] != null && row[name] !== '') return row[name];
+    // BOM-prefixed variant
+    const bomKey = '\ufeff' + name;
+    if (row[bomKey] != null && row[bomKey] !== '') return row[bomKey];
+  }
+  // Last resort: case-insensitive search across all keys
+  const lowerTargets = names.map(n => n.toLowerCase().trim());
+  for (const key of Object.keys(row)) {
+    const cleanKey = key.replace(/^\ufeff/, '').toLowerCase().trim();
+    if (lowerTargets.includes(cleanKey)) return row[key];
+  }
+  return '';
+}
+
+function buildTeamsFromData(rawRows) {
+  // rawRows: parsed CSV rows with FName, LName, "Direct Manager" populated
+  const mgrMap = {}; // "Mgr Full Name" -> Set("fn|ln")
+  const personFullNames = {}; // "fn|ln" -> "First Last"
+  const personManager = {}; // "fn|ln" -> "Mgr Full Name"
+
+  // Diagnostic: log first row's keys if we end up with no teams
+  if (rawRows.length > 0) {
+    console.log('[buildTeamsFromData] first row keys:', Object.keys(rawRows[0]));
+    console.log('[buildTeamsFromData] total rows:', rawRows.length);
+  }
+
+  // Track which source(s) contributed rows for each manager
+  const mgrSources = {}; // mgr -> Set of sources ('Internal','External')
+  for (const row of rawRows) {
+    const fn = String(getCol(row, 'FName', 'First Name', 'FirstName') || '').trim();
+    const ln = String(getCol(row, 'LName', 'Last Name', 'LastName') || '').trim();
+    const mgr = String(getCol(row, 'Direct Manager', 'DirectManager', 'Manager') || '').trim();
+    const src = row._source || 'Internal';
+    if (!fn || !ln || !mgr) continue;
+    const key = fn + '|' + ln;
+    personFullNames[key] = fn + ' ' + ln;
+    personManager[key] = mgr;
+    if (!mgrMap[mgr]) mgrMap[mgr] = new Set();
+    mgrMap[mgr].add(key);
+    if (!mgrSources[mgr]) mgrSources[mgr] = new Set();
+    mgrSources[mgr].add(src);
+  }
+
+  console.log('[buildTeamsFromData] unique managers found:', Object.keys(mgrMap).length);
+
+  // Build TEAMS array
+  TEAMS = [];
+  const teamLookup = {};
+  Object.entries(mgrMap)
+    .filter(([_, members]) => members.size >= MIN_TEAM_SIZE)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([mgrFullName, memberKeys]) => {
+      const parts = mgrFullName.split(' ');
+      const tlFn = parts[0] || '';
+      const tlLn = parts.slice(1).join(' ') || '';
+      const members = [];
+      memberKeys.forEach(key => {
+        const [fn, ln] = key.split('|');
+        members.push({ fn, ln });
+      });
+      members.sort((a, b) => a.ln.localeCompare(b.ln));
+      teamLookup[mgrFullName] = TEAMS.length;
+      // A team is External if ANY of its rows came from an External sheet
+      const sources = mgrSources[mgrFullName] || new Set(['Internal']);
+      const isExternal = sources.has('External');
+      TEAMS.push({ tlFn, tlLn, label: mgrFullName, members, isExternal });
+    });
+
+  // Build lookup maps
+  personTeamMap = {};
+  tlSet = new Set();
+  TEAMS.forEach((t, ti) => {
+    tlSet.add(t.tlFn + '|' + t.tlLn);
+    t.members.forEach(m => { personTeamMap[m.fn + '|' + m.ln] = ti; });
+  });
+  allPersonKeys = new Set([...Object.keys(personTeamMap), ...tlSet]);
+
+  // Compute display labels: use "F. LastName" only when the surname is shared
+  // by more than one team lead — keeps labels short but unambiguous.
+  // Future-proof: any new manager with a duplicate surname is handled automatically.
+  const lnCount = {};
+  TEAMS.forEach(t => { lnCount[t.tlLn] = (lnCount[t.tlLn] || 0) + 1; });
+  TEAMS.forEach(t => {
+    t.displayLabel = lnCount[t.tlLn] > 1
+      ? t.tlFn.charAt(0) + '. ' + t.tlLn
+      : t.tlLn;
+  });
+}
+
+// ─── FILE HANDLING ──────────────────────────────────────────────────────────
+document.getElementById('drop-zone').addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); });
+document.getElementById('drop-zone').addEventListener('dragleave', e => e.currentTarget.classList.remove('drag-over'));
+document.getElementById('drop-zone').addEventListener('drop', e => { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); if(e.dataTransfer.files[0]) parseFile(e.dataTransfer.files[0]); });
+document.getElementById('file-input').addEventListener('change', e => { if(e.target.files[0]) parseFile(e.target.files[0]); });
+
+function triggerReload() {
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('upload-zone').style.display = 'flex';
+}
+
+function parseFile(file) {
+  const name = (file.name || '').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+    parseXLSX(file);
+  } else {
+    parseCSV(file);
+  }
+}
+
+function parseCSV(file) {
+  Papa.parse(file, {
+    header: true, skipEmptyLines: true,
+    transformHeader: h => h.trim().replace(/^\ufeff/, ''),
+    complete: r => {
+      // For CSV uploads, all rows are treated as Internal by default.
+      const rows = r.data.map(row => ({ ...row, _source: 'Internal' }));
+      processData(rows);
+    },
+    error: err => alert('Error reading CSV: ' + err.message)
+  });
+}
+
+function parseXLSX(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', cellDates: false });
+      // Read all sheets and tag each row with its source.
+      // Sheet name containing "outsourc", "extern", or "ext" -> External; otherwise Internal.
+      const allRows = [];
+      wb.SheetNames.forEach((sheetName, idx) => {
+        const sheet = wb.Sheets[sheetName];
+        const sheetRows = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false });
+        const lower = sheetName.toLowerCase();
+        const isExt = /outsourc|extern|\bext\b/.test(lower);
+        sheetRows.forEach(row => {
+          // Trim all string values and tag with source
+          const cleaned = {};
+          Object.keys(row).forEach(k => {
+            const trimmedKey = k.trim();
+            cleaned[trimmedKey] = typeof row[k] === 'string' ? row[k].trim() : row[k];
+          });
+          cleaned._source = isExt ? 'External' : 'Internal';
+          cleaned._sheetName = sheetName;
+          allRows.push(cleaned);
+        });
+      });
+      if (allRows.length === 0) {
+        alert('No data rows found in the Excel file.');
+        return;
+      }
+      processData(allRows);
+    } catch (err) {
+      alert('Error reading Excel file: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── DATA PROCESSING ────────────────────────────────────────────────────────
+function processData(rows) {
+  // STEP 1: Build TEAMS dynamically from Direct Manager column
+  buildTeamsFromData(rows);
+  if (TEAMS.length === 0) {
+    const sampleKeys = rows.length > 0 ? Object.keys(rows[0]).slice(0, 10).join(', ') : '(no rows)';
+    alert('No teams could be detected.\n\nCheck that the file has a "Direct Manager" column populated.\n\nDetected columns in first row:\n' + sampleKeys + '\n\nSee browser console (F12) for more diagnostic info.');
+    return;
+  }
+
+  // STEP 2: Parse rows into allData
+  allData = [];
+  for (const row of rows) {
+    const fn = String(getCol(row, 'FName', 'First Name', 'FirstName') || '').trim();
+    const ln = String(getCol(row, 'LName', 'Last Name', 'LastName') || '').trim();
+    const key = fn + '|' + ln;
+    if (!allPersonKeys.has(key)) continue;
+    const dateStr = String(getCol(row, 'Date') || '').trim();
+    const proj = String(getCol(row, 'Project #', 'Project#', 'ProjectNumber') || '').trim();
+    const task = String(getCol(row, 'Task') || '').trim();
+    const hours = parseFloat(getCol(row, 'Hours') || 0) || 0;
+    const d = new Date(dateStr);
+    if (isNaN(d)) continue;
+    const month = d.getMonth() + 1, year = d.getFullYear();
+    // Category detection — priority order matters
+    const isVac = /vacation/i.test(task);
+    const isHoliday = /company holiday/i.test(task);
+    // Authorised leave and illness reduce Net Capacity (like vacation)
+    const isLeave = !isVac && /(authoris|authoriz)ed?\s+leave|unpaid\s+leave|paid\s+leave|illness|sick\s+leave|compassionate\s+leave|study\s+leave|parental\s+leave/i.test(task);
+    // Office closure reduces capacity like company holiday
+    const isOfficeClosure = /office\s+clos/i.test(task);
+    // On bench as a task name is always non-chargeable regardless of project
+    const isBenchTask = /^on\s+bench$/i.test(task);
+    // All P-prefixed project numbers (e.g. P01900415, P26126154) are non-chargeable internal projects
+    const isPProject = /^P\d/i.test(proj);
+    const isAdmin = proj.toLowerCase() === 'admin';
+    const isOnBench = NON_CHARGEABLE_PROJECTS.has(proj);
+    const isTrainer = /activities as a trainer/i.test(task);
+    const isTrainee = !isTrainer && /(virtual training|face-to-face.*train|in-person train|\btraining\b)/i.test(task);
+    // Hierarchy: Vacation > Leave > Holiday > OfficeClosure > Admin/OnBench/BenchTask > Chargeable
+    let cat = 'Chargeable';
+    if (isVac)           cat = 'Vacation';
+    else if (isLeave)    cat = 'Leave';        // authorised/sick leave — reduces Net Cap
+    else if (isHoliday)  cat = 'Holiday';
+    else if (isOfficeClosure) cat = 'Holiday'; // office closure = same effect as holiday
+    else if (isAdmin || isOnBench || isBenchTask) cat = 'Admin';
+    else if (isPProject) cat = 'Internal';
+    // BU (Employee) — extract the 5-digit code (e.g. "26252" from "26252 - IIS Bulgaria EUR")
+    const buRaw = String(getCol(row, 'BU (Employee)', 'BU Employee', 'BU(Employee)') || '').trim();
+    const bu = buRaw.replace(/[^0-9]/g, '').slice(0, 5);
+    // BU (Job Owner) — column G — identifies the business unit that owns the project
+    const buJobRaw = String(getCol(row, 'BU (Job Owner)', 'BU Job Owner', 'BU(Job Owner)') || '').trim();
+    const buJob = buJobRaw.replace(/[^0-9]/g, '').slice(0, 5);
+    // Project name for display in cross-BU table
+    const projName = String(getCol(row, 'Project', 'Project Name', 'ProjectName') || '').trim();
+    allData.push({ fn, ln, key, month, year, hours, cat, proj, projName, bu, buJob, isTrainer, isTrainee, teamIdx: personTeamMap[key] ?? -1, isTL: tlSet.has(key) });
+  }
+
+  if (!allData.length) { alert('No data could be parsed from the file.'); return; }
+
+  // STEP 3: Initialize filters
+  const ymSet = new Set(allData.map(r => r.year * 100 + r.month));
+  activeMonths = new Set(ymSet);
+  activeTeams = new Set(TEAMS.map((_, i) => i));
+  activePerson = null;
+
+  buildMonthFilters([...ymSet].sort());
+  buildTeamFilters();
+  update();
+  document.getElementById('upload-zone').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+}
+
+// ─── FILTER BUILDERS ────────────────────────────────────────────────────────
+let allMonths = []; // cached for rebuilds
+
+function buildMonthFilters(yms) {
+  allMonths = yms;
+  const c = document.getElementById('month-filters');
+  c.innerHTML = '';
+  // "All" toggle
+  const all = btn('All', true, 'all-active', () => {
+    activeMonths = new Set(allMonths);
+    syncMonthBtns();
+    update();
+  });
+  all.dataset.ymAll = '1';
+  c.appendChild(all);
+  // Individual month toggles — same logic as Team filter:
+  // first click from "All" selects only that month
+  yms.forEach(ym => {
+    const mo = ym % 100, yr = Math.floor(ym / 100);
+    const b = btn(MONTH_NAMES[mo-1] + ' ' + yr, false, '', () => {
+      const allSelected = activeMonths.size === allMonths.length;
+      if (allSelected) {
+        // First click after "All" → select only this month
+        activeMonths = new Set([ym]);
+      } else if (activeMonths.has(ym)) {
+        activeMonths.delete(ym);
+        if (activeMonths.size === 0) activeMonths = new Set(allMonths);
+      } else {
+        activeMonths.add(ym);
+      }
+      syncMonthBtns();
+      update();
+    });
+    b.dataset.ym = ym;
+    c.appendChild(b);
+  });
+}
+function syncMonthBtns() {
+  const allSelected = activeMonths.size === allMonths.length;
+  document.querySelectorAll('#month-filters .f-btn').forEach(b => {
+    b.classList.remove('active','all-active');
+    if (b.dataset.ymAll) {
+      if (allSelected) b.classList.add('all-active');
+    } else if (b.dataset.ym) {
+      if (activeMonths.has(parseInt(b.dataset.ym))) b.classList.add('active');
+    }
+  });
+}
+
+function buildTeamFilters() {
+  const c = document.getElementById('team-filters');
+  c.innerHTML = '';
+  const all = btn('All teams', true, 'all-active', () => {
+    activeTeams = new Set(TEAMS.map((_,i)=>i));
+    activePerson = null;
+    hidePersonFilter();
+    syncTeamBtns();
+    update();
+  });
+  all.dataset.teamAll = '1';
+  c.appendChild(all);
+  TEAMS.map((t, ti) => ({ t, ti }))
+    .sort((a, b) => a.t.tlLn.localeCompare(b.t.tlLn))
+    .forEach(({ t, ti }) => {
+      const b = btn(t.displayLabel, false, '', () => {
+        toggleTeam(ti);
+      });
+      b.dataset.ti = ti;
+      if (t.isExternal) {
+        const extChip = document.createElement('span');
+        extChip.className = 'ext-chip';
+        extChip.textContent = 'EXT';
+        b.appendChild(extChip);
+      }
+      c.appendChild(b);
+    });
+}
+
+function toggleTeam(ti) {
+  const allSelected = activeTeams.size === TEAMS.length;
+  if (allSelected) {
+    // First click after "All" → select only this team
+    activeTeams = new Set([ti]);
+  } else if (activeTeams.has(ti)) {
+    activeTeams.delete(ti);
+    if (activeTeams.size === 0) activeTeams = new Set(TEAMS.map((_,i)=>i)); // revert to all
+  } else {
+    activeTeams.add(ti);
+  }
+  // Person filter: only show if exactly one team selected
+  if (activeTeams.size === 1) {
+    const selectedTi = [...activeTeams][0];
+    activePerson = null;
+    buildPersonFilters(selectedTi);
+  } else {
+    activePerson = null;
+    hidePersonFilter();
+  }
+  syncTeamBtns();
+  update();
+}
+
+function syncTeamBtns() {
+  const allSelected = activeTeams.size === TEAMS.length;
+  document.querySelectorAll('#team-filters .f-btn').forEach(b => {
+    b.classList.remove('active', 'all-active');
+    if (b.dataset.teamAll) {
+      if (allSelected) b.classList.add('all-active');
+    } else if (b.dataset.ti !== undefined) {
+      if (!allSelected && activeTeams.has(parseInt(b.dataset.ti))) b.classList.add('active');
+    }
+  });
+}
+
+function hidePersonFilter() {
+  document.getElementById('person-row').style.display = 'none';
+}
+
+function buildPersonFilters(teamIdx) {
+  const team = TEAMS[teamIdx];
+  const c = document.getElementById('person-filters');
+  c.innerHTML = '';
+
+  // Show row
+  document.getElementById('person-row').style.display = 'flex';
+
+  // "All" toggle — resets to no person filter
+  const all = btn('All', true, 'all-active', () => {
+    activePerson = null;
+    syncPersonBtns();
+    update();
+  });
+  all.dataset.personAll = '1';
+  c.appendChild(all);
+
+  // TL chip (blue accent)
+  const tlKey = team.tlFn + '|' + team.tlLn;
+  const tlBtn = btn(team.displayLabel + ' (TL)', false, '', () => {
+    togglePerson(tlKey);
+  });
+  tlBtn.dataset.personKey = tlKey;
+  tlBtn.style.borderColor = 'rgba(26,92,143,0.35)';
+  tlBtn.style.color = '#1a5c8f';
+  c.appendChild(tlBtn);
+
+  // Each member — sorted alphabetically by last name
+  [...team.members].sort((a, b) => a.ln.localeCompare(b.ln)).forEach(m => {
+    const key = m.fn + '|' + m.ln;
+    const label = m.fn.charAt(0) + '. ' + m.ln;
+    const b = btn(label, false, '', () => {
+      togglePerson(key);
+    });
+    b.dataset.personKey = key;
+    c.appendChild(b);
+  });
+}
+
+function togglePerson(key) {
+  if (!activePerson) {
+    activePerson = new Set([key]);
+  } else if (activePerson.has(key)) {
+    activePerson.delete(key);
+    if (activePerson.size === 0) activePerson = null;
+  } else {
+    activePerson.add(key);
+  }
+  syncPersonBtns();
+  update();
+}
+
+function syncPersonBtns() {
+  document.querySelectorAll('#person-filters .f-btn').forEach(b => {
+    b.classList.remove('active', 'all-active');
+    if (b.dataset.personAll) {
+      if (!activePerson) b.classList.add('all-active');
+    } else if (b.dataset.personKey) {
+      if (activePerson && activePerson.has(b.dataset.personKey)) b.classList.add('active');
+    }
+  });
+}
+
+function btn(label, isActive, activeClass, onclick) {
+  const b = document.createElement('button');
+  b.className = 'f-btn' + (isActive ? ' ' + activeClass : '');
+  b.textContent = label;
+  b.onclick = onclick;
+  return b;
+}
+
+// ─── MAIN UPDATE ────────────────────────────────────────────────────────────
+function update() {
+  // ── Context-aware TL set ──────────────────────────────────────────────────
+  // "TL" means "lead of one of the CURRENTLY ACTIVE teams", not "TL ever".
+  // Example: when Pavlina's team is selected, Boris Tashkov is her *member*,
+  // not a TL — so he should appear in charts and averages like any other member.
+  const activeTLKeys = new Set(
+    TEAMS.filter((_, ti) => activeTeams.has(ti)).map(t => t.tlFn + '|' + t.tlLn)
+  );
+
+  // ── filteredFull ──────────────────────────────────────────────────────────
+  const filteredFull = allData.filter(r => {
+    if (!activeMonths.has(r.year * 100 + r.month)) return false;
+    // Person filter: Set of selected keys, or null for "all"
+    if (activePerson) return activePerson.has(r.key);
+    // For absolute TLs (isTL from raw data): include if their own team is active
+    // OR if they are a member of an active team (e.g. a TL appearing under their director)
+    if (r.isTL) {
+      const tlTeamIdx = TEAMS.findIndex(t => t.tlFn + '|' + t.tlLn === r.key);
+      return activeTeams.has(tlTeamIdx) || activeTeams.has(r.teamIdx);
+    }
+    return activeTeams.has(r.teamIdx);
+  });
+
+  // ── Per person stats ──────────────────────────────────────────────────────
+  const personStats = {};
+  for (const r of filteredFull) {
+    if (!personStats[r.key]) personStats[r.key] = {
+      fn: r.fn, ln: r.ln,
+      isTL: activeTLKeys.has(r.key),
+      teamIdx: r.teamIdx, months: new Set(),
+      ch: 0, vac: 0, hol: 0, leave: 0, adm: 0, internal: 0, trained: 0, trainer: 0
+    };
+    const p = personStats[r.key];
+    p.months.add(r.year * 100 + r.month);
+    if (r.cat === 'Chargeable') p.ch += r.hours;
+    else if (r.cat === 'Vacation') p.vac += r.hours;
+    else if (r.cat === 'Holiday') p.hol += r.hours;
+    else if (r.cat === 'Leave') p.leave += r.hours;  // authorised/sick leave
+    else if (r.cat === 'Internal') p.internal += r.hours;
+    else p.adm += r.hours;
+    if (r.isTrainee) p.trained += r.hours;
+    if (r.isTrainer) p.trainer += r.hours;
+  }
+  for (const p of Object.values(personStats)) {
+    // Baseline = actual Mon–Fri days in each active month × 8h
+    // Capacity = total actually logged hours (data-driven, not calendar-theoretical).
+    // This handles: (1) overtime workers correctly, (2) partial months correctly
+    // (e.g. May data cut off mid-month — calendar would show full 22 days × 8h = 176h
+    // while only 8 days of data exist; actual logged gives the right denominator).
+    // For complete months with no overtime, result is identical to the standard model.
+    p.cap = p.ch + p.vac + p.hol + p.leave + p.adm + p.internal;
+    // Net Capacity = all logged hours − time off (= ch + adm)
+    p.netCap = p.cap - p.vac - p.hol - p.leave;
+    // Free Time = non-billable non-training non-internal (pure idle/admin)
+    p.free = p.netCap - p.ch - p.trained - p.trainer - p.internal;
+    p.pct = p.netCap > 0 ? p.ch / p.netCap * 100 : 0;
+    // Working days = Net Cap / 8h
+    p.wd = Math.max(p.netCap / 8, 1);
+    p.fpd = p.free / p.wd;
+    // OT detection: compare chargeable to contractual (Mon-Fri × 8h) capacity.
+    // With actual-logged model pct ≤ 100% always, so we use the standard baseline
+    // as the OT reference: if ch > contractual net cap → person worked overtime.
+    let stdCap = 0;
+    for (const ym of p.months) stdCap += getWorkingDays(Math.floor(ym / 100), ym % 100) * 8;
+    p.standardNetCap = Math.max(stdCap - p.vac - p.hol - p.leave, 0);
+    p.isOT = p.ch > p.standardNetCap;
+  }
+
+  // ── Dynamic training thresholds ───────────────────────────────────────────
+  const traineesWithHours = Object.values(personStats).filter(p => !p.isTL && p.trained > 0);
+  const trainersWithHours = Object.values(personStats).filter(p => !p.isTL && p.trainer > 0);
+  const avgTrained = traineesWithHours.length > 0
+    ? traineesWithHours.reduce((s, p) => s + p.trained, 0) / traineesWithHours.length : 0;
+  const avgTrainer = trainersWithHours.length > 0
+    ? trainersWithHours.reduce((s, p) => s + p.trainer, 0) / trainersWithHours.length : 0;
+  dynamicThresholds.trainFloor = Math.max(avgTrained, TRAIN_FLOOR_HOURS);
+  dynamicThresholds.coachFloor = Math.max(avgTrainer, COACH_FLOOR_HOURS);
+
+  // ── Monthly breakdown (excl. context-TLs unless person is explicitly selected) ──
+  const monthMap = {};
+  for (const ym of [...activeMonths].sort()) {
+    const mo = ym % 100, yr = Math.floor(ym / 100);
+    monthMap[ym] = { ch: 0, vac: 0, hol: 0, leave: 0, adm: 0, internal: 0, netCap: 0, train: 0, people: new Set(), wd: getWorkingDays(yr, mo) };
+  }
+  for (const r of filteredFull) {
+    if (activeTLKeys.has(r.key) && !(activePerson && activePerson.has(r.key))) continue;
+    const ym = r.year * 100 + r.month;
+    if (!monthMap[ym]) continue;
+    if (r.cat === 'Chargeable') monthMap[ym].ch += r.hours;
+    else if (r.cat === 'Vacation') monthMap[ym].vac += r.hours;
+    else if (r.cat === 'Holiday') monthMap[ym].hol += r.hours;
+    else if (r.cat === 'Leave') monthMap[ym].leave += r.hours;
+    else if (r.cat === 'Internal') monthMap[ym].internal += r.hours;
+    else monthMap[ym].adm += r.hours;  // Admin (includes training)
+    if (r.isTrainee || r.isTrainer) monthMap[ym].train += r.hours;
+    monthMap[ym].people.add(r.key);
+  }
+  for (const m of Object.values(monthMap)) {
+    m.n = m.people.size;
+    // Capacity = actual logged (handles partial months and overtime automatically)
+    m.cap = m.ch + m.vac + m.hol + m.leave + m.adm + m.internal;
+    m.netCap = m.cap - m.vac - m.hol - m.leave;  // = ch + adm
+    m.free = m.netCap - m.ch - m.train - m.internal;  // pure admin (excl training and internal)
+    m.pct = m.netCap > 0 ? m.ch / m.netCap * 100 : 0;
+  }
+
+  // ── Team summary (excl. context-TLs) ─────────────────────────────────────
+  const teamStats = {};
+  TEAMS.forEach((t, ti) => { if (activeTeams.has(ti)) teamStats[ti] = { ch: 0, vac: 0, netCap: 0, people: new Set() }; });
+  for (const [key, p] of Object.entries(personStats)) {
+    if (p.isTL || !activeTeams.has(p.teamIdx)) continue;
+    if (!teamStats[p.teamIdx]) continue;
+    teamStats[p.teamIdx].ch += p.ch;
+    teamStats[p.teamIdx].vac += p.vac;
+    teamStats[p.teamIdx].netCap += p.netCap;
+    teamStats[p.teamIdx].people.add(key);
+  }
+  for (const ts of Object.values(teamStats)) {
+    ts.n = ts.people.size;
+    ts.free = ts.netCap - ts.ch;
+    ts.pct = ts.netCap > 0 ? ts.ch / ts.netCap * 100 : 0;
+  }
+
+  updateKPIs(personStats);
+  updateHeatGrid(teamStats);
+  updateCharts(monthMap, teamStats, personStats);
+  updateIndTable(personStats);
+  updateMonTable(monthMap);
+  updateCrossBuTable(filteredFull);
+  updatePeriodBadge();
+}
+
+function updatePeriodBadge() {
+  const yms = [...activeMonths].sort();
+  const badge = document.getElementById('period-badge');
+  if (!yms.length) { badge.textContent = 'No data'; return; }
+  // Check if selection is contiguous
+  let contiguous = true;
+  for (let i = 1; i < yms.length; i++) {
+    const prev = yms[i-1], cur = yms[i];
+    const prevMo = prev % 100, prevYr = Math.floor(prev / 100);
+    const expected = prevMo === 12 ? (prevYr + 1) * 100 + 1 : prev + 1;
+    if (cur !== expected) { contiguous = false; break; }
+  }
+  const f = yms[0], l = yms[yms.length-1];
+  if (yms.length === 1) {
+    badge.textContent = MONTH_NAMES[(f%100)-1] + ' ' + Math.floor(f/100);
+  } else if (contiguous) {
+    badge.textContent = MONTH_NAMES[(f%100)-1] + ' – ' + MONTH_NAMES[(l%100)-1] + ' ' + Math.floor(l/100);
+  } else {
+    badge.textContent = yms.length + ' months selected';
+  }
+}
+
+function updateKPIs(ps) {
+  let ch=0, nc=0, free=0, vac=0, hol=0, leave=0, wd=0, trained=0, trainer=0, internalHrs=0;
+  for (const p of Object.values(ps)) {
+    if (p.isTL && !(activePerson && activePerson.has(p.fn + '|' + p.ln))) continue;
+    ch += p.ch; nc += p.netCap; free += p.free;
+    vac += p.vac; hol += (p.hol||0); leave += (p.leave||0); wd += p.wd;
+    trained += p.trained || 0; trainer += p.trainer || 0; internalHrs += p.internal || 0;
+  }
+  const pct = nc > 0 ? ch/nc*100 : 0;
+  document.getElementById('k-charge').innerHTML = pct.toFixed(2) + '<span>%</span>';
+  document.getElementById('k-proj').innerHTML = (+ch).toFixed(2) + '<span> h</span>';
+  document.getElementById('k-free').innerHTML = (+free).toFixed(2) + '<span> h</span>';
+  document.getElementById('k-fpd').innerHTML = (wd > 0 ? free/wd : 0).toFixed(2) + '<span> h</span>';
+  document.getElementById('k-vac').innerHTML = (vac + hol + leave).toFixed(2) + '<span> h</span>';
+  const vacSub = document.getElementById('k-vac-sub');
+  if (vacSub) vacSub.textContent = `vac ${vac.toFixed(2)}h · holiday ${hol.toFixed(2)}h · leave ${leave.toFixed(2)}h`;
+
+  const totalTrain = trained + trainer;
+  // Effective utilization = (Chargeable + Training) / Net Cap — shows utilization if training counts as productive
+  const effUtil = nc > 0 ? (ch + totalTrain) / nc * 100 : 0;
+  document.getElementById('k-train').innerHTML = (+totalTrain).toFixed(2) + '<span> h</span>';
+  document.getElementById('k-train-sub').textContent = `${effUtil.toFixed(2)}% incl. training · trained ${trained.toFixed(2)}h · trainer ${trainer.toFixed(2)}h`;
+  document.getElementById('k-internal').innerHTML = internalHrs.toFixed(2) + '<span> h</span>';
+  document.getElementById('k-internal-sub').textContent = 'P-project hours (non-billable)';
+
+  const sub = document.getElementById('k-charge-sub');
+  if (sub) {
+    if (activePerson) {
+      if (activePerson.size === 1) {
+        const [fn, ln] = [...activePerson][0].split('|');
+        sub.textContent = `${fn} ${ln} only`;
+      } else {
+        sub.textContent = `${activePerson.size} people selected`;
+      }
+    } else {
+      sub.textContent = 'selected teams excl. TL';
+    }
+  }
+}
+
+function bc(pct, isOT) { return isOT ? '#7c3aed' : pct >= 65 ? '#3d9e4a' : pct >= 50 ? '#d97706' : '#e4003a'; }
+
+function updateHeatGrid(ts) {
+  const g = document.getElementById('heat-grid');
+  g.innerHTML = '';
+
+  // When all teams are selected (default state), hide the grid — it would be too cluttered.
+  // The user should select specific teams from the filter to see comparisons here.
+  const allSelected = activeTeams.size === TEAMS.length;
+  if (allSelected) {
+    g.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:32px 24px;color:var(--text3);font-size:12px;font-family:var(--mono);">
+      Select one or more teams from the <strong style="color:var(--text2);">TEAM</strong> filter above to see the overview here.
+    </div>`;
+    return;
+  }
+
+  let shown = 0;
+  // Sort by chargeability % descending — highest performers first
+  const sortedTeams = TEAMS
+    .map((t, ti) => ({ t, ti, s: ts[ti] || {} }))
+    .filter(({ ti, s }) => activeTeams.has(ti) && (s.n || 0) >= 2)
+    .sort((a, b) => (b.s.pct || 0) - (a.s.pct || 0));
+
+  sortedTeams.forEach(({ t, ti, s }) => {
+    const activePeople = s.n || 0;
+    const pct = s.pct || 0;
+    const col = bc(pct);
+    const cell = document.createElement('div');
+    cell.className = 'heat-cell';
+    cell.style.setProperty('--c', col);
+    cell.innerHTML = `<div style="position:absolute;left:0;top:0;bottom:0;width:3px;background:${col};border-radius:3px 0 0 3px;"></div>
+      ${t.isExternal ? '<div style="position:absolute;top:6px;right:6px;font-family:var(--mono);font-size:8px;font-weight:600;color:#fb923c;background:rgba(251,146,60,.12);border:1px solid rgba(251,146,60,.35);padding:1px 4px;border-radius:3px;letter-spacing:.04em;">EXT</div>' : ''}
+      <div class="heat-cell-name">${t.displayLabel}</div>
+      <div class="heat-cell-sub">${t.tlFn} · ${activePeople} people</div>
+      <div class="heat-cell-pct" style="color:${col}">${pct.toFixed(2)}<span style="font-size:12px;color:var(--text2)">%</span></div>`;
+    cell.onclick = () => toggleTeam(ti);
+    g.appendChild(cell);
+    shown++;
+  });
+  // Empty state
+  if (shown === 0) {
+    g.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--text3);font-size:12px;">No teams with ≥2 active people in the selected period.</div>`;
+  }
+}
+
+function destroyChart(id) { if (charts[id]) { charts[id].destroy(); charts[id] = null; } }
+
+function updateCharts(monthMap, teamStats, personStats) {
+  const yms = Object.keys(monthMap).map(Number).sort();
+  const mLabels = yms.map(ym => MONTH_NAMES[(ym%100)-1]);
+  const mPcts = yms.map(ym => +(monthMap[ym].pct||0).toFixed(2));
+  const mCh = yms.map(ym => (monthMap[ym].ch||0));
+  const mTrain = yms.map(ym => (monthMap[ym].train||0));
+  const mInternal = yms.map(ym => (monthMap[ym].internal||0));
+  // Free / Admin = true idle time (training and internal already excluded from m.free)
+  const mFreeOther = yms.map(ym => (monthMap[ym].free||0));
+  const mVac = yms.map(ym => (monthMap[ym].vac||0));
+  const mHol = yms.map(ym => (monthMap[ym].hol||0));
+  const mLeave = yms.map(ym => (monthMap[ym].leave||0));
+
+  // Compute the Team Comparison height first, so Monthly chart can match it
+  // (this requires deferring the actual chart creation to after we know the team count)
+
+  // Chart 1: Monthly chargeability — height matches Team Comparison
+  destroyChart('ch-monthly');
+  charts['ch-monthly'] = new Chart(document.getElementById('ch-monthly'), {
+    type: 'bar',
+    data: {
+      labels: mLabels,
+      datasets: [{
+        label: 'Chargeability %', data: mPcts,
+        backgroundColor: mPcts.map(v => v>=65?'rgba(106,168,115,.6)':v>=50?'rgba(210,160,90,.68)':'rgba(212,113,126,.68)'),
+        borderColor: mPcts.map(v => bc(v)), borderWidth: 1, borderRadius: 5,
+      }]
+    },
+    options: chartOpts('y', v => v + '%', 0, 100)
+  });
+
+  // Chart 2: Team comparison
+  // Chart 2: Team comparison — horizontal bars sorted by chargeability %
+  // Filter to teams with ≥2 active people in the period
+  // Disambiguated labels: "F. Lastname" to handle managers with same surname
+  const allTeams = TEAMS.map((t, ti) => ({ t, ti, s: teamStats[ti] || {} }))
+    .filter(({ ti, s }) => activeTeams.has(ti) && (s.n || 0) >= 2)
+    .sort((a, b) => (b.s.pct || 0) - (a.s.pct || 0));
+
+  // When > 10 teams: split into top 5 + bottom 5 with a visual gap
+  const SPLIT_THRESHOLD = 10;
+  const TOP_N = 5;
+  let displayList, hiddenCount = 0, splitMode = false;
+  if (allTeams.length > SPLIT_THRESHOLD) {
+    splitMode = true;
+    const topPart = allTeams.slice(0, TOP_N);
+    const bottomPart = allTeams.slice(-TOP_N);
+    hiddenCount = allTeams.length - 2 * TOP_N;
+    // Insert separator entries — 2 empty rows that render as gap
+    displayList = [
+      ...topPart,
+      { t: { tlFn: '', tlLn: '' }, ti: -1, s: { pct: null }, _separator: true },
+      { t: { tlFn: '', tlLn: '·  ·  ·' }, ti: -2, s: { pct: null }, _separator: true },
+      { t: { tlFn: '', tlLn: '' }, ti: -3, s: { pct: null }, _separator: true },
+      ...bottomPart
+    ];
+  } else {
+    displayList = allTeams;
+  }
+
+  // Update subtitle context line
+  const subEl = document.getElementById('ch-teams-sub');
+  if (subEl) {
+    if (splitMode) {
+      const topPct = (allTeams[TOP_N - 1].s.pct || 0).toFixed(2);
+      const botPct = (allTeams[allTeams.length - TOP_N].s.pct || 0).toFixed(2);
+      subEl.textContent = `Top ${TOP_N} · Bottom ${TOP_N}  —  ${hiddenCount} teams hidden (between ${botPct}% and ${topPct}%)`;
+    } else {
+      subEl.textContent = `${allTeams.length} teams`;
+    }
+  }
+
+  destroyChart('ch-teams');
+  const teamsH = Math.max(210, displayList.length * 22 + 40);
+  document.getElementById('ch-teams').parentElement.style.height = teamsH + 'px';
+  document.getElementById('ch-monthly').parentElement.style.height = teamsH + 'px';
+  charts['ch-teams'] = new Chart(document.getElementById('ch-teams'), {
+    type: 'bar',
+    data: {
+      labels: displayList.map(({ t, _separator }) => _separator ? t.tlLn : t.displayLabel),
+      datasets: [{
+        label: '%',
+        data: displayList.map(({ s, _separator }) => _separator ? null : +((s.pct || 0).toFixed(2))),
+        backgroundColor: displayList.map(({ s, _separator }) => { if (_separator) return 'transparent'; const p = s.pct || 0; return p >= 65 ? 'rgba(106,168,115,.6)' : p >= 50 ? 'rgba(210,160,90,.68)' : 'rgba(212,113,126,.68)'; }),
+        borderColor: displayList.map(({ s, _separator }) => _separator ? 'transparent' : bc(s.pct || 0)),
+        borderWidth: 1, borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ctx.parsed.x === null ? '' : ' ' + ctx.parsed.x + '%' }, filter: ctx => ctx.parsed.x !== null } },
+      scales: {
+        x: { min: 0, max: 100, ticks: { color: '#7a85a8', font: { family: 'DM Mono', size: 12 }, callback: v => v + '%' }, grid: { color: 'rgba(25,33,102,0.08)' } },
+        y: { ticks: { color: '#4b5876', font: { family: 'DM Mono', size: 12 } }, grid: { color: 'rgba(25,33,102,0.08)' } }
+      }
+    }
+  });
+
+  // Chart 3: Stacked breakdown
+  destroyChart('ch-breakdown');
+  charts['ch-breakdown'] = new Chart(document.getElementById('ch-breakdown'), {
+    type: 'bar',
+    data: {
+      labels: mLabels,
+      datasets: [
+        { label: 'Chargeable', data: mCh, backgroundColor: 'rgba(106,168,115,.6)', borderRadius: 3 },
+        { label: 'Free / Admin', data: mFreeOther, backgroundColor: 'rgba(100,145,210,.65)', borderRadius: 3 },
+        { label: 'Training', data: mTrain, backgroundColor: 'rgba(155,100,210,.70)', borderRadius: 3 },
+        { label: 'Internal', data: mInternal, backgroundColor: 'rgba(42,178,172,.60)', borderRadius: 3 },
+        { label: 'Holiday', data: mHol, backgroundColor: 'rgba(210,90,105,.62)', borderRadius: 3 },
+        { label: 'Leave', data: mLeave, backgroundColor: 'rgba(215,128,55,.65)', borderRadius: 3 },
+        { label: 'Vacation', data: mVac, backgroundColor: 'rgba(210,178,55,.62)', borderRadius: 3 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { color: '#4b5876', font: { family: 'DM Mono', size: 10 }, boxWidth: 8, padding: 10 } } },
+      scales: {
+        x: { stacked: true, ticks: { color: '#7a85a8', font: { family: 'DM Mono', size: 12 } }, grid: { color: 'rgba(25,33,102,0.08)' } },
+        y: { stacked: true, ticks: { color: '#7a85a8', font: { family: 'DM Mono', size: 12 } }, grid: { color: 'rgba(25,33,102,0.08)' } }
+      }
+    }
+  });
+
+  // Chart 4: Individual horizontal bar (non-TL only, capped at largest team size)
+  // Cap = size of the largest team (so a team-sized chart is always feasible)
+  const maxTeamSize = TEAMS.length > 0 ? Math.max(...TEAMS.map(t => t.members.length)) : 20;
+  const indPeople = Object.values(personStats).filter(p => !p.isTL).sort((a,b) => b.pct - a.pct).slice(0, maxTeamSize);
+  destroyChart('ch-individual');
+  const indH = Math.max(210, indPeople.length * 22 + 40);
+  document.getElementById('ch-individual').parentElement.style.height = indH + 'px';
+  // Sync breakdown chart height with individual chart so they appear balanced side by side
+  document.getElementById('ch-breakdown').parentElement.style.height = indH + 'px';
+  charts['ch-individual'] = new Chart(document.getElementById('ch-individual'), {
+    type: 'bar',
+    data: {
+      labels: indPeople.map(p => p.fn.charAt(0) + '. ' + p.ln),
+      datasets: [{
+        label: '%', data: indPeople.map(p => +p.pct.toFixed(1)),
+        backgroundColor: indPeople.map(p => p.pct>=65?'rgba(106,168,115,.6)':p.pct>=50?'rgba(210,160,90,.68)':'rgba(212,113,126,.68)'),
+        borderColor: indPeople.map(p => bc(p.pct)), borderWidth: 1, borderRadius: 4,
+      }]
+    },
+    options: {
+      ...chartOpts('x', v => v + '%', 0, 100),
+      indexAxis: 'y',
+      scales: {
+        x: { min:0, max:100, ticks:{color:'#7a85a8',font:{family:'DM Mono',size:12},callback:v=>v+'%'}, grid:{color:'rgba(25,33,102,0.08)'} },
+        y: { ticks:{color:'#4b5876',font:{family:'DM Mono',size:12}}, grid:{color:'rgba(25,33,102,0.08)'} }
+      }
+    }
+  });
+}
+
+function chartOpts(axis, tickFmt, min, max) {
+  const scaleKey = axis === 'y' ? 'y' : 'x';
+  return {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ' ' + ctx.parsed[axis === 'y' ? 'y' : 'x'] + (tickFmt ? '' : '') } } },
+    scales: {
+      x: { ticks:{color:'#7a85a8',font:{family:'DM Mono',size:12},...(axis==='y'?{}:{callback:tickFmt}),...(axis==='y'?{}:(min!==undefined?{min,max}:{}))}, grid:{color:'rgba(25,33,102,0.08)'} },
+      y: { ticks:{color:'#7a85a8',font:{family:'DM Mono',size:12},...(axis==='x'?{}:{callback:tickFmt}),...(axis==='x'?{}:(min!==undefined?{min,max}:{}))}, grid:{color:'rgba(25,33,102,0.08)'} }
+    }
+  };
+}
+
+function tag(pct, isTL, isOT) {
+  if (isTL) return '<span class="tag tag-tl">TL</span>';
+  if (isOT) return '<span class="tag tag-ot">OT</span>';
+  if (pct >= 65) return '<span class="tag tag-h">High</span>';
+  if (pct >= 50) return '<span class="tag tag-m">Mid</span>';
+  return '<span class="tag tag-l">Low</span>';
+}
+
+// ─── TOOLTIP ────────────────────────────────────────────────────────────────
+const tipBox = document.getElementById('tooltip-box');
+let tipVisible = false;
+
+function showTip(btn, title, body, formula) {
+  const rect = btn.getBoundingClientRect();
+  tipBox.innerHTML = `<div class="tooltip-title">${title}</div>
+    <div class="tooltip-body">${body}</div>
+    ${formula ? `<div class="tooltip-formula">${formula.replace(/\n/g,'<br>')}</div>` : ''}`;
+  tipBox.classList.add('visible');
+  tipVisible = true;
+  // Position: prefer right of button, clamp to viewport
+  let left = rect.right + 10;
+  let top = rect.top;
+  const tw = 340, th = tipBox.offsetHeight || 200;
+  if (left + tw > window.innerWidth - 10) left = rect.left - tw - 10;
+  if (top + th > window.innerHeight - 10) top = window.innerHeight - th - 10;
+  if (top < 10) top = 10;
+  tipBox.style.left = left + 'px';
+  tipBox.style.top = top + 'px';
+}
+
+document.addEventListener('click', e => {
+  if (tipVisible && !e.target.classList.contains('info-btn')) {
+    tipBox.classList.remove('visible');
+    tipVisible = false;
+  }
+});
+
+function updateIndTable(ps) {
+  const tbody = document.getElementById('ind-tbody');
+  const sorted = Object.values(ps).filter(p => p.months.size > 0).sort((a,b) => {
+    if (a.isTL !== b.isTL) return a.isTL ? 1 : -1;
+    return b.pct - a.pct;
+  });
+  let html = '';
+  let tlSep = false;
+  for (const p of sorted) {
+    if (p.isTL && !tlSep) {
+      html += `<tr><td colspan="12" style="padding:4px 18px;background:var(--bg3);font-size:10px;color:var(--text3);font-family:var(--mono);">— Team Leads (excluded from averages) —</td></tr>`;
+      tlSep = true;
+    }
+    const tlIdx = TEAMS.findIndex(t => t.tlFn + '|' + t.tlLn === p.fn + '|' + p.ln);
+    const teamObj = p.isTL ? TEAMS[tlIdx] : TEAMS[p.teamIdx];
+    const teamLabel = teamObj?.label || '';
+    const teamExt = teamObj?.isExternal ? '<span class="ext-chip">EXT</span>' : '';
+    const barW = Math.min(p.pct, 100).toFixed(1);
+
+    // Training cells — emphasized when significant
+    const trainedH = p.trained;
+    const trainerH = p.trainer;
+    const internalH = p.internal || 0;
+    const trainedCell = trainedH > 0
+      ? `<td class="mono" style="color:#60a5fa;font-weight:500;">${trainedH.toFixed(2)}</td>`
+      : `<td class="mono" style="color:var(--text3);">—</td>`;
+    const trainerCell = trainerH > 0
+      ? `<td class="mono" style="color:#a78bfa;font-weight:500;">${trainerH.toFixed(2)}</td>`
+      : `<td class="mono" style="color:var(--text3);">—</td>`;
+    const internalCell = internalH > 0
+      ? `<td class="mono" style="color:#22d3ee;font-weight:500;">${internalH.toFixed(2)}</td>`
+      : `<td class="mono" style="color:var(--text3);">—</td>`;
+
+    // Status badges — combine standard tag with optional Train/Coach badges
+    let badges = tag(p.pct, p.isTL, p.isOT);
+    if (trainedH >= dynamicThresholds.trainFloor) badges += ' <span class="tag tag-train">TRAIN</span>';
+    if (trainerH >= dynamicThresholds.coachFloor) badges += ' <span class="tag tag-coach">COACH</span>';
+
+    html += `<tr class="${p.isTL ? 'tl-row' : ''}">
+      <td class="bold">${p.fn} ${p.ln}</td>
+      <td style="font-size:11px;color:var(--text2);">${teamLabel}${teamExt}</td>
+      <td class="mono">${p.netCap.toFixed(2)}</td>
+      <td class="mono">${p.ch.toFixed(2)}</td>
+      <td class="mono">${p.vac.toFixed(2)}</td>
+      <td class="mono">${p.free.toFixed(2)}</td>
+      ${trainedCell}
+      ${trainerCell}
+      ${internalCell}
+      <td>
+        <div class="bar-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${barW}%;background:${bc(p.pct, p.isOT)};"></div></div>
+          <span class="pv" style="color:${bc(p.pct, p.isOT)}">${p.pct.toFixed(2)}%</span>
+        </div>
+      </td>
+      <td class="mono">${p.fpd.toFixed(2)} h</td>
+      <td style="white-space:nowrap;">${badges}</td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+
+function updateMonTable(monthMap) {
+  const tbody = document.getElementById('mon-tbody');
+  const yms = Object.keys(monthMap).map(Number).sort();
+  let html = '', totCh=0, totNc=0, totFr=0, totN=0, totFpd=0, totWd=0;
+  for (const ym of yms) {
+    const m = monthMap[ym], mo = ym%100, yr = Math.floor(ym/100);
+    const wd = m.wd; // kept for period badge
+    const actualWd = Math.max(m.netCap / (8 * Math.max(m.n, 1)), 1);
+    const fpd = m.n > 0 ? m.free / (m.n * actualWd) : 0;
+    totCh += m.ch; totNc += m.netCap; totFr += m.free; totN += m.n; totFpd += fpd; totWd += m.n * actualWd;
+    const barW = Math.min(m.pct, 100).toFixed(1);
+    html += `<tr>
+      <td><span style="font-family:var(--mono);font-size:10px;background:var(--bg4);padding:2px 8px;border-radius:4px;">${MONTH_NAMES[mo-1]} ${yr}</span></td>
+      <td class="mono">${m.n}</td>
+      <td class="mono">${m.netCap.toFixed(2)}</td>
+      <td class="mono">${m.ch.toFixed(2)}</td>
+      <td>
+        <div class="bar-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${barW}%;background:${bc(m.pct)};"></div></div>
+          <span class="pv" style="color:${bc(m.pct)}">${m.pct.toFixed(2)}%</span>
+        </div>
+      </td>
+      <td class="mono">${m.free.toFixed(2)}</td>
+      <td class="mono">${fpd.toFixed(2)} h</td>
+    </tr>`;
+  }
+  if (yms.length > 1) {
+    const ap = totNc > 0 ? totCh/totNc*100 : 0;
+    const avgN = Math.round(totN / yms.length);
+    // Weighted average: total free time across months ÷ total person-working-days
+    const avgFpd = totWd > 0 ? totFr / totWd : 0;
+    html += `<tr style="font-weight:500;background:var(--bg3);">
+      <td style="font-size:10px;color:var(--text2);font-family:var(--mono);">Average</td>
+      <td class="mono">${avgN}</td>
+      <td class="mono">${(totNc/yms.length).toFixed(2)}</td>
+      <td class="mono">${(totCh/yms.length).toFixed(2)}</td>
+      <td>
+        <div class="bar-wrap">
+          <div class="bar-bg"><div class="bar-fill" style="width:${Math.min(ap,100).toFixed(2)}%;background:${bc(ap)};"></div></div>
+          <span class="pv" style="color:${bc(ap)}">${ap.toFixed(2)}%</span>
+        </div>
+      </td>
+      <td class="mono">${(totFr/yms.length).toFixed(2)}</td>
+      <td class="mono">${avgFpd.toFixed(2)} h</td>
+    </tr>`;
+  }
+  tbody.innerHTML = html;
+}
+</script>
+<script>
+(function(){
+  var navItems = [].slice.call(document.querySelectorAll('.sb-item[data-target]'));
+  if (!navItems.length) return;
+  var sections = navItems.map(function(n){ return document.getElementById(n.dataset.target); });
+
+  function setActive(id){
+    navItems.forEach(function(n){ n.classList.toggle('active', n.dataset.target === id); });
+  }
+
+  // click → smooth scroll
+  navItems.forEach(function(n){
+    n.addEventListener('click', function(){
+      var el = document.getElementById(n.dataset.target);
+      if (!el) return;
+      setActive(n.dataset.target);
+      window.__navLock = Date.now();
+      el.scrollIntoView({ behavior:'smooth', block:'start' });
+    });
+  });
+
+  // scroll-spy: highlight the section nearest the top
+  function onScroll(){
+    if (window.__navLock && Date.now() - window.__navLock < 650) return; // don't fight a click-scroll
+    var line = 90, best = null, bestTop = -Infinity;
+    sections.forEach(function(el, i){
+      if (!el) return;
+      var top = el.getBoundingClientRect().top;
+      if (top - line <= 0 && top > bestTop) { bestTop = top; best = navItems[i].dataset.target; }
+    });
+    if (!best) best = navItems[0].dataset.target; // above first section
+    setActive(best);
+  }
+  window.addEventListener('scroll', onScroll, { passive:true });
+  document.addEventListener('DOMContentLoaded', onScroll);
+  onScroll();
+})();
+
+// ─── CROSS-BU PROJECT VALIDATION ────────────────────────────────────────────
+// Projects owned by BU 26102 (Nordics CEEA & Netherlands) are IIS projects.
+// If any employee from BU 26251 (Operations Bulgaria) logs hours on such a project
+// they need a separate Operations job number → FLAG.
+let _crossBuData = [];
+let _crossBuSortCol = 'proj';
+let _crossBuSortAsc = true;
+
+function updateCrossBuTable(rows) {
+  const BU_JOB_IIS = '26102'; // Nordics CEEA & Netherlands — IIS-owned projects
+  const BU_EMP_OPS = '26251'; // Operations Bulgaria — should NOT log on IIS projects
+  const badge = document.getElementById('crossbu-badge');
+  const tbody = document.getElementById('crossbu-tbody');
+  if (!tbody) return;
+
+  const projMap = {};
+  for (const r of rows) {
+    // Only IIS-owned projects (BU Job Owner = 26102)
+    if (!r.buJob || !r.buJob.startsWith(BU_JOB_IIS)) continue;
+    const proj = (r.proj || '').trim();
+    if (!proj || proj.toLowerCase() === 'admin') continue;
+    if (/^P\d/i.test(proj)) continue;
+    if (NON_CHARGEABLE_PROJECTS.has(proj)) continue;
+    if (!projMap[proj]) projMap[proj] = { name: r.projName || '', iis: {}, ops: {} };
+    const d = projMap[proj];
+    const key = r.fn + '|' + r.ln;
+    const label = r.fn.charAt(0) + '. ' + r.ln;
+    if (r.bu === BU_EMP_OPS) {
+      // Operations employee on IIS project → violation
+      if (!d.ops[key]) d.ops[key] = { name: label, hours: 0 };
+      d.ops[key].hours += r.hours;
+      // Track monthly breakdown for OPS hours
+      const ym = r.year * 100 + r.month;
+      if (!d.opsMonthly) d.opsMonthly = {};
+      d.opsMonthly[ym] = (d.opsMonthly[ym] || 0) + r.hours;
+    } else {
+      // IIS (or other) employee on IIS project → normal
+      if (!d.iis[key]) d.iis[key] = { name: label, hours: 0 };
+      d.iis[key].hours += r.hours;
+    }
+  }
+
+  // Flag only projects with at least one OPS employee logged
+  _crossBuData = Object.entries(projMap)
+    .filter(([, d]) => Object.keys(d.ops).length > 0);
+
+  if (badge) {
+    badge.textContent = _crossBuData.length ? _crossBuData.length + ' issue' + (_crossBuData.length > 1 ? 's' : '') : '✓ No issues';
+    badge.style.background   = _crossBuData.length ? 'rgba(220,38,38,.1)' : 'rgba(22,163,74,.1)';
+    badge.style.color        = _crossBuData.length ? '#dc2626' : '#16a34a';
+    badge.style.borderColor  = _crossBuData.length ? 'rgba(220,38,38,.25)' : 'rgba(22,163,74,.25)';
+  }
+
+  renderCrossBuRows();
+}
+
+function renderCrossBuRows() {
+  const tbody = document.getElementById('crossbu-tbody');
+  if (!tbody) return;
+
+  if (!_crossBuData.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text2);font-size:13px;">✓ No BU mismatches in the selected period and teams.</td></tr>`;
+    updateCrossBuSortHeaders();
+    return;
+  }
+
+  // Sort
+  const sorted = [..._crossBuData].sort((a, b) => {
+    let va, vb;
+    if (_crossBuSortCol === 'proj') { va = a[0]; vb = b[0]; }
+    else if (_crossBuSortCol === 'iis') {
+      va = Object.values(a[1].iis).reduce((s, p) => s + p.hours, 0);
+      vb = Object.values(b[1].iis).reduce((s, p) => s + p.hours, 0);
+    } else {
+      va = Object.values(a[1].ops).reduce((s, p) => s + p.hours, 0);
+      vb = Object.values(b[1].ops).reduce((s, p) => s + p.hours, 0);
+    }
+    if (va < vb) return _crossBuSortAsc ? -1 : 1;
+    if (va > vb) return _crossBuSortAsc ? 1 : -1;
+    return 0;
+  });
+
+  const chip = (label, hours, isOps) => {
+    const [bg, col, brd] = isOps
+      ? ['rgba(217,119,6,.1)','#92400e','rgba(217,119,6,.3)']
+      : ['rgba(26,92,143,.08)','#1a5c8f','rgba(26,92,143,.2)'];
+    return `<span style="display:inline-flex;gap:4px;background:${bg};color:${col};border:1px solid ${brd};border-radius:4px;padding:2px 8px;font-size:11px;font-family:var(--mono);margin:2px 2px 2px 0;">${label} <span style="opacity:.6;">${hours.toFixed(1)}h</span></span>`;
+  };
+
+  // Totals
+  let totalIis = 0, totalOps = 0;
+  sorted.forEach(([, d]) => {
+    totalIis += Object.values(d.iis).reduce((s, p) => s + p.hours, 0);
+    totalOps += Object.values(d.ops).reduce((s, p) => s + p.hours, 0);
+  });
+
+  tbody.innerHTML = sorted.map(([proj, d]) => {
+    const monthly = d.opsMonthly || {};
+    const monthChips = Object.keys(monthly).sort().map(ym => {
+      const mo = ym % 100, yr = Math.floor(ym / 100);
+      const mName = MONTH_NAMES[mo - 1] + ' ' + yr;
+      return `<span style="display:inline-flex;gap:3px;background:rgba(217,119,6,.08);color:#92400e;border:1px solid rgba(217,119,6,.25);border-radius:4px;padding:2px 7px;font-size:11px;font-family:var(--mono);margin:2px 2px 2px 0;white-space:nowrap;">${mName} <span style="font-weight:600;">${monthly[ym].toFixed(1)}h</span></span>`;
+    }).join('');
+    return `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px 14px;font-family:var(--mono);font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;vertical-align:top;">
+        <span style="display:inline-block;width:7px;height:7px;background:#dc2626;border-radius:50%;margin-right:6px;vertical-align:middle;"></span>${proj}
+      </td>
+      <td style="padding:10px 14px;font-size:12px;color:var(--text2);vertical-align:top;max-width:180px;line-height:1.4;">${d.name || '—'}</td>
+      <td style="padding:8px 10px;vertical-align:top;">${Object.values(d.iis).map(p => chip(p.name, p.hours, false)).join('')}</td>
+      <td style="padding:8px 10px;vertical-align:top;">${Object.values(d.ops).map(p => chip(p.name, p.hours, true)).join('')}</td>
+      <td style="padding:8px 10px;vertical-align:top;">${monthChips}</td>
+    </tr>`;
+  }).join('')
+  + `<tr style="border-top:2px solid var(--border2);background:var(--bg3);">
+    <td colspan="3" style="padding:10px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--text2);font-family:var(--font);">
+      Total — ${sorted.length} project${sorted.length > 1 ? 's' : ''} flagged
+    </td>
+    <td style="padding:10px 14px;">
+      <span style="font-family:var(--mono);font-size:13px;font-weight:600;color:#92400e;">${totalOps.toFixed(2)} h</span>
+      <span style="font-size:10px;color:var(--text2);margin-left:4px;">Ops BU</span>
+    </td>
+    <td style="padding:10px 14px;font-size:11px;color:var(--text2);">across ${activeMonths.size} month${activeMonths.size > 1 ? 's' : ''}</td>
+  </tr>`;
+
+  updateCrossBuSortHeaders();
+}
+
+function updateCrossBuSortHeaders() {
+  ['proj','iis','ops'].forEach(col => {
+    const el = document.getElementById('crossbu-sort-' + col);
+    if (!el) return;
+    const active = _crossBuSortCol === col;
+    el.style.cursor = 'pointer';
+    el.style.userSelect = 'none';
+    el.querySelector('.sort-arrow').textContent = active ? (_crossBuSortAsc ? ' ↑' : ' ↓') : ' ⇅';
+    el.style.color = active ? 'var(--accent)' : '';
+  });
+}
+
+function crossBuSort(col) {
+  if (_crossBuSortCol === col) _crossBuSortAsc = !_crossBuSortAsc;
+  else { _crossBuSortCol = col; _crossBuSortAsc = col === 'proj'; }
+  renderCrossBuRows();
+}
+</script>
+</body>
+</html>
